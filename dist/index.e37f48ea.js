@@ -586,17 +586,16 @@ function hmrAccept(bundle /*: ParcelRequire */ , id /*: string */ ) {
 },{}],"aenu9":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 var _webImmediateJs = require("core-js/modules/web.immediate.js");
+var _symbol = require("core-js/es/symbol");
 var _modelJs = require("./model.js");
 var _recipeViewJs = require("./views/recipeView.js");
 var _recipeViewJsDefault = parcelHelpers.interopDefault(_recipeViewJs);
+var _searchViewJs = require("./views/searchView.js");
+var _searchViewJsDefault = parcelHelpers.interopDefault(_searchViewJs);
 var _runtime = require("regenerator-runtime/runtime");
-const recipeContainer = document.querySelector(".recipe");
-// https://forkify-api.herokuapp.com/v2
-///////////////////////////////////////
 const controlRecipes = async function() {
     try {
         const id = window.location.hash.slice(1);
-        console.log(id);
         if (!id) return;
         (0, _recipeViewJsDefault.default).renderSpinner();
         // Loading recipe
@@ -607,12 +606,26 @@ const controlRecipes = async function() {
         (0, _recipeViewJsDefault.default).renderError();
     }
 };
+const controlSearchResults = async function() {
+    try {
+        // !. Get search query
+        const query = (0, _searchViewJsDefault.default).getQuery();
+        if (!query) return;
+        // 2. Load search results
+        await _modelJs.loadSearchResults(query);
+        // 3. Render results
+        console.log(_modelJs.state.search.results);
+    } catch (err) {
+        console.log(err);
+    }
+};
 const init = function() {
     (0, _recipeViewJsDefault.default).addHandlerRender(controlRecipes);
+    (0, _searchViewJsDefault.default).addHandlerSearch(controlSearchResults);
 };
 init();
 
-},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","core-js/modules/web.immediate.js":"49tUX","regenerator-runtime/runtime":"dXNgZ","./model.js":"Y4A21","./views/recipeView.js":"l60JC"}],"gkKU3":[function(require,module,exports) {
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","core-js/modules/web.immediate.js":"49tUX","regenerator-runtime/runtime":"dXNgZ","./model.js":"Y4A21","./views/recipeView.js":"l60JC","./views/searchView.js":"9OQAM","core-js/es/symbol":"701kt"}],"gkKU3":[function(require,module,exports) {
 exports.interopDefault = function(a) {
     return a && a.__esModule ? a : {
         default: a
@@ -2465,16 +2478,21 @@ var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "state", ()=>state);
 parcelHelpers.export(exports, "loadRecipe", ()=>loadRecipe);
+parcelHelpers.export(exports, "loadSearchResults", ()=>loadSearchResults);
 var _regeneratorRuntime = require("regenerator-runtime");
 var _config = require("./config");
 var _helpers = require("./helpers");
 const state = {
-    recipe: {}
+    recipe: {},
+    search: {
+        query: "",
+        results: []
+    }
 };
 const loadRecipe = async function(id) {
     try {
-        const data = await (0, _helpers.getJSON)(`${(0, _config.API_URL)}/${id}`);
-        console.log("API Response:", data);
+        const data = await (0, _helpers.getJSON)(`${(0, _config.API_URL)}${id}`);
+        // console.log('API Response:', data);
         if (!data || !data.data || !data.data.recipe) throw new Error("Invalid API response structure");
         let { recipe } = data.data;
         state.recipe = {
@@ -2487,19 +2505,38 @@ const loadRecipe = async function(id) {
             cookingTime: recipe.cooking_time,
             ingredients: recipe.ingredients
         };
-        console.log("Loaded Recipe:", state.recipe);
+    // console.log('Loaded Recipe:', state.recipe);
     } catch (err) {
         console.error(`${err} \u{1F4A5}`);
         throw err; // Re-throw the error to handle it in the controller
     }
 };
+const loadSearchResults = async function(query) {
+    try {
+        state.search.query = query;
+        const data = await (0, _helpers.getJSON)(`${(0, _config.API_URL)}?search=${query}`);
+        console.log(data);
+        state.search.results = data.data.recipes.map((rec)=>{
+            return {
+                id: rec.id,
+                title: rec.title,
+                publisher: rec.publisher,
+                image: rec.image_url
+            };
+        });
+    // console.log(state.search.results);
+    } catch (err) {
+        console.error(`${err} \u{1F4A5}`);
+    }
+};
+loadSearchResults("pizza");
 
 },{"regenerator-runtime":"dXNgZ","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","./config":"k5Hzs","./helpers":"hGI1E"}],"k5Hzs":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "API_URL", ()=>API_URL);
 parcelHelpers.export(exports, "TIMEOUT_SEC", ()=>TIMEOUT_SEC);
-const API_URL = "https://forkify-api.herokuapp.com/api/v2/recipes";
+const API_URL = "https://forkify-api.herokuapp.com/api/v2/recipes/";
 const TIMEOUT_SEC = 10;
 
 },{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"hGI1E":[function(require,module,exports) {
@@ -2574,7 +2611,7 @@ class RecipeView {
         this.#clear();
         this.#parentElement.insertAdjacentHTML("afterbegin", markup);
     }
-    renderMessage(message = this.#message) {
+    renderMessage(message = this.#errorMessage) {
         const markup = `
         <div class="message">
             <div>
@@ -2980,6 +3017,1218 @@ Fraction.primeFactors = function(n) {
 };
 module.exports.Fraction = Fraction;
 
-},{}]},["hycaY","aenu9"], "aenu9", "parcelRequire3a11")
+},{}],"9OQAM":[function(require,module,exports) {
+var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+class SearchView {
+    #parentEl = document.querySelector(".search");
+    getQuery() {
+        const query = this.#parentEl.querySelector(".search__field").value;
+        this.#clearInput();
+        return query;
+    }
+    #clearInput() {
+        this.#parentEl.querySelector(".search__field").value = "";
+    }
+    addHandlerSearch(handler) {
+        this.#parentEl.addEventListener("submit", function(e) {
+            e.preventDefault();
+            handler();
+        });
+    }
+}
+exports.default = new SearchView();
+
+},{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"701kt":[function(require,module,exports) {
+"use strict";
+require("8c8d745d48802123");
+require("ef2a84675496c526");
+require("5e757a45bef49bd8");
+require("4f18fe1453d053be");
+require("5acf0a0ac8383800");
+require("7cebc29cab0bad9f");
+require("66ce40a55d6f2b3f");
+require("6c66380c3fe1c6be");
+require("4789aaafb5ad7180");
+require("acd557f9e235edcc");
+require("e39e2ad63fd90a95");
+require("a23484bab42b432e");
+require("9297540b2d06f927");
+require("60d8fb36d4ba36ea");
+require("83840a161beca365");
+require("412e161be42ee712");
+require("77997277ebac37ef");
+require("50ab5a1bc813cbac");
+require("a6fd27d551686555");
+require("38ff32eb6b60594b");
+var path = require("511cdc2d41a17e21");
+module.exports = path.Symbol;
+
+},{"8c8d745d48802123":"jprpE","ef2a84675496c526":"9XvHS","5e757a45bef49bd8":"c39HV","4f18fe1453d053be":"RU9Zf","5acf0a0ac8383800":"9PnxW","7cebc29cab0bad9f":"9uKu1","66ce40a55d6f2b3f":"fCzth","6c66380c3fe1c6be":"i3PKT","4789aaafb5ad7180":"hWT2K","acd557f9e235edcc":"a5lqJ","e39e2ad63fd90a95":"5wvK6","a23484bab42b432e":"6VGtU","9297540b2d06f927":"jxmZY","60d8fb36d4ba36ea":"j3TNE","83840a161beca365":"72eMP","412e161be42ee712":"jRTLb","77997277ebac37ef":"dkEbD","50ab5a1bc813cbac":"5v5yi","a6fd27d551686555":"7b0UU","38ff32eb6b60594b":"2qZLg","511cdc2d41a17e21":"gKjqB"}],"jprpE":[function(require,module,exports) {
+"use strict";
+var $ = require("ae9bcc3c886d2e43");
+var fails = require("320b7f8f99977d72");
+var isArray = require("c9c4d35908c64a9b");
+var isObject = require("e40ffb4fd8cdd6ef");
+var toObject = require("600c6b55241cb08d");
+var lengthOfArrayLike = require("c35064fc908d412e");
+var doesNotExceedSafeInteger = require("d3e233a6dd5508d7");
+var createProperty = require("4da7fb5e70719532");
+var arraySpeciesCreate = require("706ee6e3130d3c44");
+var arrayMethodHasSpeciesSupport = require("76c3a5d37e98bd2f");
+var wellKnownSymbol = require("210a9ec1468bd8f4");
+var V8_VERSION = require("b368da136a5325df");
+var IS_CONCAT_SPREADABLE = wellKnownSymbol("isConcatSpreadable");
+// We can't use this feature detection in V8 since it causes
+// deoptimization and serious performance degradation
+// https://github.com/zloirock/core-js/issues/679
+var IS_CONCAT_SPREADABLE_SUPPORT = V8_VERSION >= 51 || !fails(function() {
+    var array = [];
+    array[IS_CONCAT_SPREADABLE] = false;
+    return array.concat()[0] !== array;
+});
+var isConcatSpreadable = function(O) {
+    if (!isObject(O)) return false;
+    var spreadable = O[IS_CONCAT_SPREADABLE];
+    return spreadable !== undefined ? !!spreadable : isArray(O);
+};
+var FORCED = !IS_CONCAT_SPREADABLE_SUPPORT || !arrayMethodHasSpeciesSupport("concat");
+// `Array.prototype.concat` method
+// https://tc39.es/ecma262/#sec-array.prototype.concat
+// with adding support of @@isConcatSpreadable and @@species
+$({
+    target: "Array",
+    proto: true,
+    arity: 1,
+    forced: FORCED
+}, {
+    // eslint-disable-next-line no-unused-vars -- required for `.length`
+    concat: function concat(arg) {
+        var O = toObject(this);
+        var A = arraySpeciesCreate(O, 0);
+        var n = 0;
+        var i, k, length, len, E;
+        for(i = -1, length = arguments.length; i < length; i++){
+            E = i === -1 ? O : arguments[i];
+            if (isConcatSpreadable(E)) {
+                len = lengthOfArrayLike(E);
+                doesNotExceedSafeInteger(n + len);
+                for(k = 0; k < len; k++, n++)if (k in E) createProperty(A, n, E[k]);
+            } else {
+                doesNotExceedSafeInteger(n + 1);
+                createProperty(A, n++, E);
+            }
+        }
+        A.length = n;
+        return A;
+    }
+});
+
+},{"ae9bcc3c886d2e43":"dIGt4","320b7f8f99977d72":"hL6D2","c9c4d35908c64a9b":"iZ18O","e40ffb4fd8cdd6ef":"Z0pBo","600c6b55241cb08d":"5cb35","c35064fc908d412e":"lY4mS","d3e233a6dd5508d7":"80pBR","4da7fb5e70719532":"76HND","706ee6e3130d3c44":"27bo1","76c3a5d37e98bd2f":"f9nnM","210a9ec1468bd8f4":"gTwyA","b368da136a5325df":"bjFlO"}],"iZ18O":[function(require,module,exports) {
+"use strict";
+var classof = require("ccb261b2d73a4fca");
+// `IsArray` abstract operation
+// https://tc39.es/ecma262/#sec-isarray
+// eslint-disable-next-line es/no-array-isarray -- safe
+module.exports = Array.isArray || function isArray(argument) {
+    return classof(argument) === "Array";
+};
+
+},{"ccb261b2d73a4fca":"bdfmm"}],"80pBR":[function(require,module,exports) {
+"use strict";
+var $TypeError = TypeError;
+var MAX_SAFE_INTEGER = 0x1FFFFFFFFFFFFF; // 2 ** 53 - 1 == 9007199254740991
+module.exports = function(it) {
+    if (it > MAX_SAFE_INTEGER) throw $TypeError("Maximum allowed index exceeded");
+    return it;
+};
+
+},{}],"76HND":[function(require,module,exports) {
+"use strict";
+var DESCRIPTORS = require("667a2d5a858194a6");
+var definePropertyModule = require("2daa2f41b7310fd4");
+var createPropertyDescriptor = require("7bb9efd811e3f83f");
+module.exports = function(object, key, value) {
+    if (DESCRIPTORS) definePropertyModule.f(object, key, createPropertyDescriptor(0, value));
+    else object[key] = value;
+};
+
+},{"667a2d5a858194a6":"92ZIi","2daa2f41b7310fd4":"iJR4w","7bb9efd811e3f83f":"1lpav"}],"27bo1":[function(require,module,exports) {
+"use strict";
+var arraySpeciesConstructor = require("4580767bbbe40f0b");
+// `ArraySpeciesCreate` abstract operation
+// https://tc39.es/ecma262/#sec-arrayspeciescreate
+module.exports = function(originalArray, length) {
+    return new (arraySpeciesConstructor(originalArray))(length === 0 ? 0 : length);
+};
+
+},{"4580767bbbe40f0b":"2cWdm"}],"2cWdm":[function(require,module,exports) {
+"use strict";
+var isArray = require("a9e5b9af57e551f6");
+var isConstructor = require("2b4d84c184e08f4f");
+var isObject = require("f4bec83e8d6008c9");
+var wellKnownSymbol = require("4a13cf47b259a825");
+var SPECIES = wellKnownSymbol("species");
+var $Array = Array;
+// a part of `ArraySpeciesCreate` abstract operation
+// https://tc39.es/ecma262/#sec-arrayspeciescreate
+module.exports = function(originalArray) {
+    var C;
+    if (isArray(originalArray)) {
+        C = originalArray.constructor;
+        // cross-realm fallback
+        if (isConstructor(C) && (C === $Array || isArray(C.prototype))) C = undefined;
+        else if (isObject(C)) {
+            C = C[SPECIES];
+            if (C === null) C = undefined;
+        }
+    }
+    return C === undefined ? $Array : C;
+};
+
+},{"a9e5b9af57e551f6":"iZ18O","2b4d84c184e08f4f":"iVgSy","f4bec83e8d6008c9":"Z0pBo","4a13cf47b259a825":"gTwyA"}],"iVgSy":[function(require,module,exports) {
+"use strict";
+var uncurryThis = require("3b3e7fa8cfe4b3ac");
+var fails = require("84df2127d2d40501");
+var isCallable = require("ae35eceee587c4bc");
+var classof = require("7bd40df22601ee7e");
+var getBuiltIn = require("271ff92378cbc486");
+var inspectSource = require("74840ba4357c1c30");
+var noop = function() {};
+var construct = getBuiltIn("Reflect", "construct");
+var constructorRegExp = /^\s*(?:class|function)\b/;
+var exec = uncurryThis(constructorRegExp.exec);
+var INCORRECT_TO_STRING = !constructorRegExp.test(noop);
+var isConstructorModern = function isConstructor(argument) {
+    if (!isCallable(argument)) return false;
+    try {
+        construct(noop, [], argument);
+        return true;
+    } catch (error) {
+        return false;
+    }
+};
+var isConstructorLegacy = function isConstructor(argument) {
+    if (!isCallable(argument)) return false;
+    switch(classof(argument)){
+        case "AsyncFunction":
+        case "GeneratorFunction":
+        case "AsyncGeneratorFunction":
+            return false;
+    }
+    try {
+        // we can't check .prototype since constructors produced by .bind haven't it
+        // `Function#toString` throws on some built-it function in some legacy engines
+        // (for example, `DOMQuad` and similar in FF41-)
+        return INCORRECT_TO_STRING || !!exec(constructorRegExp, inspectSource(argument));
+    } catch (error) {
+        return true;
+    }
+};
+isConstructorLegacy.sham = true;
+// `IsConstructor` abstract operation
+// https://tc39.es/ecma262/#sec-isconstructor
+module.exports = !construct || fails(function() {
+    var called;
+    return isConstructorModern(isConstructorModern.call) || !isConstructorModern(Object) || !isConstructorModern(function() {
+        called = true;
+    }) || called;
+}) ? isConstructorLegacy : isConstructorModern;
+
+},{"3b3e7fa8cfe4b3ac":"7GlkT","84df2127d2d40501":"hL6D2","ae35eceee587c4bc":"l3Kyn","7bd40df22601ee7e":"dKT7A","271ff92378cbc486":"6ZUSY","74840ba4357c1c30":"9jh7O"}],"dKT7A":[function(require,module,exports) {
+"use strict";
+var TO_STRING_TAG_SUPPORT = require("397e535b3976d304");
+var isCallable = require("eebd8012c2d2c3ae");
+var classofRaw = require("8da113eeaf06c4ba");
+var wellKnownSymbol = require("df252844008f634");
+var TO_STRING_TAG = wellKnownSymbol("toStringTag");
+var $Object = Object;
+// ES3 wrong here
+var CORRECT_ARGUMENTS = classofRaw(function() {
+    return arguments;
+}()) === "Arguments";
+// fallback for IE11 Script Access Denied error
+var tryGet = function(it, key) {
+    try {
+        return it[key];
+    } catch (error) {}
+};
+// getting tag from ES6+ `Object.prototype.toString`
+module.exports = TO_STRING_TAG_SUPPORT ? classofRaw : function(it) {
+    var O, tag, result;
+    return it === undefined ? "Undefined" : it === null ? "Null" : typeof (tag = tryGet(O = $Object(it), TO_STRING_TAG)) == "string" ? tag : CORRECT_ARGUMENTS ? classofRaw(O) : (result = classofRaw(O)) === "Object" && isCallable(O.callee) ? "Arguments" : result;
+};
+
+},{"397e535b3976d304":"3Do6Z","eebd8012c2d2c3ae":"l3Kyn","8da113eeaf06c4ba":"bdfmm","df252844008f634":"gTwyA"}],"3Do6Z":[function(require,module,exports) {
+"use strict";
+var wellKnownSymbol = require("6306cd4835715127");
+var TO_STRING_TAG = wellKnownSymbol("toStringTag");
+var test = {};
+test[TO_STRING_TAG] = "z";
+module.exports = String(test) === "[object z]";
+
+},{"6306cd4835715127":"gTwyA"}],"f9nnM":[function(require,module,exports) {
+"use strict";
+var fails = require("bbe4de7ca7a1c6be");
+var wellKnownSymbol = require("6cb3e4ca309911dc");
+var V8_VERSION = require("2ccd198412508124");
+var SPECIES = wellKnownSymbol("species");
+module.exports = function(METHOD_NAME) {
+    // We can't use this feature detection in V8 since it causes
+    // deoptimization and serious performance degradation
+    // https://github.com/zloirock/core-js/issues/677
+    return V8_VERSION >= 51 || !fails(function() {
+        var array = [];
+        var constructor = array.constructor = {};
+        constructor[SPECIES] = function() {
+            return {
+                foo: 1
+            };
+        };
+        return array[METHOD_NAME](Boolean).foo !== 1;
+    });
+};
+
+},{"bbe4de7ca7a1c6be":"hL6D2","6cb3e4ca309911dc":"gTwyA","2ccd198412508124":"bjFlO"}],"9XvHS":[function(require,module,exports) {
+"use strict";
+var TO_STRING_TAG_SUPPORT = require("2f5378debd330ed5");
+var defineBuiltIn = require("5e0718aecf12f1e8");
+var toString = require("6b32f4accffdcba8");
+// `Object.prototype.toString` method
+// https://tc39.es/ecma262/#sec-object.prototype.tostring
+if (!TO_STRING_TAG_SUPPORT) defineBuiltIn(Object.prototype, "toString", toString, {
+    unsafe: true
+});
+
+},{"2f5378debd330ed5":"3Do6Z","5e0718aecf12f1e8":"6XwEX","6b32f4accffdcba8":"9etkB"}],"9etkB":[function(require,module,exports) {
+"use strict";
+var TO_STRING_TAG_SUPPORT = require("312e54676af41375");
+var classof = require("2dbce13c946fe9d0");
+// `Object.prototype.toString` method implementation
+// https://tc39.es/ecma262/#sec-object.prototype.tostring
+module.exports = TO_STRING_TAG_SUPPORT ? ({}).toString : function toString() {
+    return "[object " + classof(this) + "]";
+};
+
+},{"312e54676af41375":"3Do6Z","2dbce13c946fe9d0":"dKT7A"}],"c39HV":[function(require,module,exports) {
+"use strict";
+// TODO: Remove this module from `core-js@4` since it's split to modules listed below
+require("9907e25c4a0aca96");
+require("6ca7b218a3c5142b");
+require("733763f50161f4ff");
+require("c7e8ec39e8a501c2");
+require("c7f11a8d456724");
+
+},{"9907e25c4a0aca96":"3B3Vb","6ca7b218a3c5142b":"d29gK","733763f50161f4ff":"iUB0I","c7e8ec39e8a501c2":"1kdiO","c7f11a8d456724":"cMwHd"}],"3B3Vb":[function(require,module,exports) {
+"use strict";
+var $ = require("aa5b0a4df7071e1c");
+var global = require("8f1cfb397a510ebd");
+var call = require("ec29447784c0114a");
+var uncurryThis = require("2ae82c68e0ae40f");
+var IS_PURE = require("33b2452838c11281");
+var DESCRIPTORS = require("fe806d898b4ac536");
+var NATIVE_SYMBOL = require("22d83c4d1a79086a");
+var fails = require("4d2b1c3a38702ef3");
+var hasOwn = require("e759feb93fde3dec");
+var isPrototypeOf = require("5787c74359c86565");
+var anObject = require("cb32a2177bbbabaa");
+var toIndexedObject = require("20c01e2a38c99bca");
+var toPropertyKey = require("db20fe52e48e74e7");
+var $toString = require("62c50d67351dd58a");
+var createPropertyDescriptor = require("22cebb6457d12409");
+var nativeObjectCreate = require("31dc62cd3a5d2fda");
+var objectKeys = require("14509c82c4f3e2e9");
+var getOwnPropertyNamesModule = require("e62ee144604e88fa");
+var getOwnPropertyNamesExternal = require("d7fe574b8ddea4e9");
+var getOwnPropertySymbolsModule = require("fc2b88a87581c564");
+var getOwnPropertyDescriptorModule = require("7260979738a18766");
+var definePropertyModule = require("c58a10205146713c");
+var definePropertiesModule = require("a86b1c2861165466");
+var propertyIsEnumerableModule = require("dfca683f72250bcc");
+var defineBuiltIn = require("55a26bb040d83918");
+var defineBuiltInAccessor = require("97712bd669b06ccf");
+var shared = require("b2130786c0cb0f80");
+var sharedKey = require("aaac558287b5aa94");
+var hiddenKeys = require("c6ea7d7218c4c1f0");
+var uid = require("f4a251fc6a0ec32a");
+var wellKnownSymbol = require("2d3c3a8ae405672f");
+var wrappedWellKnownSymbolModule = require("a99e55c559023f8b");
+var defineWellKnownSymbol = require("baa63ea979fa51ca");
+var defineSymbolToPrimitive = require("ecef47c4fbdd606b");
+var setToStringTag = require("f57a8c7fd7d84ffb");
+var InternalStateModule = require("37236ad9fe95a3e");
+var $forEach = require("c50230ad6eef7275").forEach;
+var HIDDEN = sharedKey("hidden");
+var SYMBOL = "Symbol";
+var PROTOTYPE = "prototype";
+var setInternalState = InternalStateModule.set;
+var getInternalState = InternalStateModule.getterFor(SYMBOL);
+var ObjectPrototype = Object[PROTOTYPE];
+var $Symbol = global.Symbol;
+var SymbolPrototype = $Symbol && $Symbol[PROTOTYPE];
+var RangeError = global.RangeError;
+var TypeError = global.TypeError;
+var QObject = global.QObject;
+var nativeGetOwnPropertyDescriptor = getOwnPropertyDescriptorModule.f;
+var nativeDefineProperty = definePropertyModule.f;
+var nativeGetOwnPropertyNames = getOwnPropertyNamesExternal.f;
+var nativePropertyIsEnumerable = propertyIsEnumerableModule.f;
+var push = uncurryThis([].push);
+var AllSymbols = shared("symbols");
+var ObjectPrototypeSymbols = shared("op-symbols");
+var WellKnownSymbolsStore = shared("wks");
+// Don't use setters in Qt Script, https://github.com/zloirock/core-js/issues/173
+var USE_SETTER = !QObject || !QObject[PROTOTYPE] || !QObject[PROTOTYPE].findChild;
+// fallback for old Android, https://code.google.com/p/v8/issues/detail?id=687
+var fallbackDefineProperty = function(O, P, Attributes) {
+    var ObjectPrototypeDescriptor = nativeGetOwnPropertyDescriptor(ObjectPrototype, P);
+    if (ObjectPrototypeDescriptor) delete ObjectPrototype[P];
+    nativeDefineProperty(O, P, Attributes);
+    if (ObjectPrototypeDescriptor && O !== ObjectPrototype) nativeDefineProperty(ObjectPrototype, P, ObjectPrototypeDescriptor);
+};
+var setSymbolDescriptor = DESCRIPTORS && fails(function() {
+    return nativeObjectCreate(nativeDefineProperty({}, "a", {
+        get: function() {
+            return nativeDefineProperty(this, "a", {
+                value: 7
+            }).a;
+        }
+    })).a !== 7;
+}) ? fallbackDefineProperty : nativeDefineProperty;
+var wrap = function(tag, description) {
+    var symbol = AllSymbols[tag] = nativeObjectCreate(SymbolPrototype);
+    setInternalState(symbol, {
+        type: SYMBOL,
+        tag: tag,
+        description: description
+    });
+    if (!DESCRIPTORS) symbol.description = description;
+    return symbol;
+};
+var $defineProperty = function defineProperty(O, P, Attributes) {
+    if (O === ObjectPrototype) $defineProperty(ObjectPrototypeSymbols, P, Attributes);
+    anObject(O);
+    var key = toPropertyKey(P);
+    anObject(Attributes);
+    if (hasOwn(AllSymbols, key)) {
+        if (!Attributes.enumerable) {
+            if (!hasOwn(O, HIDDEN)) nativeDefineProperty(O, HIDDEN, createPropertyDescriptor(1, nativeObjectCreate(null)));
+            O[HIDDEN][key] = true;
+        } else {
+            if (hasOwn(O, HIDDEN) && O[HIDDEN][key]) O[HIDDEN][key] = false;
+            Attributes = nativeObjectCreate(Attributes, {
+                enumerable: createPropertyDescriptor(0, false)
+            });
+        }
+        return setSymbolDescriptor(O, key, Attributes);
+    }
+    return nativeDefineProperty(O, key, Attributes);
+};
+var $defineProperties = function defineProperties(O, Properties) {
+    anObject(O);
+    var properties = toIndexedObject(Properties);
+    var keys = objectKeys(properties).concat($getOwnPropertySymbols(properties));
+    $forEach(keys, function(key) {
+        if (!DESCRIPTORS || call($propertyIsEnumerable, properties, key)) $defineProperty(O, key, properties[key]);
+    });
+    return O;
+};
+var $create = function create(O, Properties) {
+    return Properties === undefined ? nativeObjectCreate(O) : $defineProperties(nativeObjectCreate(O), Properties);
+};
+var $propertyIsEnumerable = function propertyIsEnumerable(V) {
+    var P = toPropertyKey(V);
+    var enumerable = call(nativePropertyIsEnumerable, this, P);
+    if (this === ObjectPrototype && hasOwn(AllSymbols, P) && !hasOwn(ObjectPrototypeSymbols, P)) return false;
+    return enumerable || !hasOwn(this, P) || !hasOwn(AllSymbols, P) || hasOwn(this, HIDDEN) && this[HIDDEN][P] ? enumerable : true;
+};
+var $getOwnPropertyDescriptor = function getOwnPropertyDescriptor(O, P) {
+    var it = toIndexedObject(O);
+    var key = toPropertyKey(P);
+    if (it === ObjectPrototype && hasOwn(AllSymbols, key) && !hasOwn(ObjectPrototypeSymbols, key)) return;
+    var descriptor = nativeGetOwnPropertyDescriptor(it, key);
+    if (descriptor && hasOwn(AllSymbols, key) && !(hasOwn(it, HIDDEN) && it[HIDDEN][key])) descriptor.enumerable = true;
+    return descriptor;
+};
+var $getOwnPropertyNames = function getOwnPropertyNames(O) {
+    var names = nativeGetOwnPropertyNames(toIndexedObject(O));
+    var result = [];
+    $forEach(names, function(key) {
+        if (!hasOwn(AllSymbols, key) && !hasOwn(hiddenKeys, key)) push(result, key);
+    });
+    return result;
+};
+var $getOwnPropertySymbols = function(O) {
+    var IS_OBJECT_PROTOTYPE = O === ObjectPrototype;
+    var names = nativeGetOwnPropertyNames(IS_OBJECT_PROTOTYPE ? ObjectPrototypeSymbols : toIndexedObject(O));
+    var result = [];
+    $forEach(names, function(key) {
+        if (hasOwn(AllSymbols, key) && (!IS_OBJECT_PROTOTYPE || hasOwn(ObjectPrototype, key))) push(result, AllSymbols[key]);
+    });
+    return result;
+};
+// `Symbol` constructor
+// https://tc39.es/ecma262/#sec-symbol-constructor
+if (!NATIVE_SYMBOL) {
+    $Symbol = function Symbol() {
+        if (isPrototypeOf(SymbolPrototype, this)) throw new TypeError("Symbol is not a constructor");
+        var description = !arguments.length || arguments[0] === undefined ? undefined : $toString(arguments[0]);
+        var tag = uid(description);
+        var setter = function(value) {
+            var $this = this === undefined ? global : this;
+            if ($this === ObjectPrototype) call(setter, ObjectPrototypeSymbols, value);
+            if (hasOwn($this, HIDDEN) && hasOwn($this[HIDDEN], tag)) $this[HIDDEN][tag] = false;
+            var descriptor = createPropertyDescriptor(1, value);
+            try {
+                setSymbolDescriptor($this, tag, descriptor);
+            } catch (error) {
+                if (!(error instanceof RangeError)) throw error;
+                fallbackDefineProperty($this, tag, descriptor);
+            }
+        };
+        if (DESCRIPTORS && USE_SETTER) setSymbolDescriptor(ObjectPrototype, tag, {
+            configurable: true,
+            set: setter
+        });
+        return wrap(tag, description);
+    };
+    SymbolPrototype = $Symbol[PROTOTYPE];
+    defineBuiltIn(SymbolPrototype, "toString", function toString() {
+        return getInternalState(this).tag;
+    });
+    defineBuiltIn($Symbol, "withoutSetter", function(description) {
+        return wrap(uid(description), description);
+    });
+    propertyIsEnumerableModule.f = $propertyIsEnumerable;
+    definePropertyModule.f = $defineProperty;
+    definePropertiesModule.f = $defineProperties;
+    getOwnPropertyDescriptorModule.f = $getOwnPropertyDescriptor;
+    getOwnPropertyNamesModule.f = getOwnPropertyNamesExternal.f = $getOwnPropertyNames;
+    getOwnPropertySymbolsModule.f = $getOwnPropertySymbols;
+    wrappedWellKnownSymbolModule.f = function(name) {
+        return wrap(wellKnownSymbol(name), name);
+    };
+    if (DESCRIPTORS) {
+        // https://github.com/tc39/proposal-Symbol-description
+        defineBuiltInAccessor(SymbolPrototype, "description", {
+            configurable: true,
+            get: function description() {
+                return getInternalState(this).description;
+            }
+        });
+        if (!IS_PURE) defineBuiltIn(ObjectPrototype, "propertyIsEnumerable", $propertyIsEnumerable, {
+            unsafe: true
+        });
+    }
+}
+$({
+    global: true,
+    constructor: true,
+    wrap: true,
+    forced: !NATIVE_SYMBOL,
+    sham: !NATIVE_SYMBOL
+}, {
+    Symbol: $Symbol
+});
+$forEach(objectKeys(WellKnownSymbolsStore), function(name) {
+    defineWellKnownSymbol(name);
+});
+$({
+    target: SYMBOL,
+    stat: true,
+    forced: !NATIVE_SYMBOL
+}, {
+    useSetter: function() {
+        USE_SETTER = true;
+    },
+    useSimple: function() {
+        USE_SETTER = false;
+    }
+});
+$({
+    target: "Object",
+    stat: true,
+    forced: !NATIVE_SYMBOL,
+    sham: !DESCRIPTORS
+}, {
+    // `Object.create` method
+    // https://tc39.es/ecma262/#sec-object.create
+    create: $create,
+    // `Object.defineProperty` method
+    // https://tc39.es/ecma262/#sec-object.defineproperty
+    defineProperty: $defineProperty,
+    // `Object.defineProperties` method
+    // https://tc39.es/ecma262/#sec-object.defineproperties
+    defineProperties: $defineProperties,
+    // `Object.getOwnPropertyDescriptor` method
+    // https://tc39.es/ecma262/#sec-object.getownpropertydescriptors
+    getOwnPropertyDescriptor: $getOwnPropertyDescriptor
+});
+$({
+    target: "Object",
+    stat: true,
+    forced: !NATIVE_SYMBOL
+}, {
+    // `Object.getOwnPropertyNames` method
+    // https://tc39.es/ecma262/#sec-object.getownpropertynames
+    getOwnPropertyNames: $getOwnPropertyNames
+});
+// `Symbol.prototype[@@toPrimitive]` method
+// https://tc39.es/ecma262/#sec-symbol.prototype-@@toprimitive
+defineSymbolToPrimitive();
+// `Symbol.prototype[@@toStringTag]` property
+// https://tc39.es/ecma262/#sec-symbol.prototype-@@tostringtag
+setToStringTag($Symbol, SYMBOL);
+hiddenKeys[HIDDEN] = true;
+
+},{"aa5b0a4df7071e1c":"dIGt4","8f1cfb397a510ebd":"i8HOC","ec29447784c0114a":"d7JlP","2ae82c68e0ae40f":"7GlkT","33b2452838c11281":"5ZsyC","fe806d898b4ac536":"92ZIi","22d83c4d1a79086a":"8KyTD","4d2b1c3a38702ef3":"hL6D2","e759feb93fde3dec":"gC2Q5","5787c74359c86565":"3jtKQ","cb32a2177bbbabaa":"4isCr","20c01e2a38c99bca":"jLWwQ","db20fe52e48e74e7":"5XWKd","62c50d67351dd58a":"a1yl4","22cebb6457d12409":"1lpav","31dc62cd3a5d2fda":"duSQE","14509c82c4f3e2e9":"kzBf4","e62ee144604e88fa":"fjY04","d7fe574b8ddea4e9":"1bojN","fc2b88a87581c564":"4DWO3","7260979738a18766":"lk5NI","c58a10205146713c":"iJR4w","a86b1c2861165466":"duA6W","dfca683f72250bcc":"7SuiS","55a26bb040d83918":"6XwEX","97712bd669b06ccf":"592rH","b2130786c0cb0f80":"i1mHK","aaac558287b5aa94":"eAjGz","c6ea7d7218c4c1f0":"661m4","f4a251fc6a0ec32a":"a3SEE","2d3c3a8ae405672f":"gTwyA","a99e55c559023f8b":"9TrPc","baa63ea979fa51ca":"en5fF","ecef47c4fbdd606b":"cSLvM","f57a8c7fd7d84ffb":"ffT5i","37236ad9fe95a3e":"7AMlF","c50230ad6eef7275":"3NAaU"}],"a1yl4":[function(require,module,exports) {
+"use strict";
+var classof = require("3e4265f3f6994add");
+var $String = String;
+module.exports = function(argument) {
+    if (classof(argument) === "Symbol") throw new TypeError("Cannot convert a Symbol value to a string");
+    return $String(argument);
+};
+
+},{"3e4265f3f6994add":"dKT7A"}],"duSQE":[function(require,module,exports) {
+"use strict";
+/* global ActiveXObject -- old IE, WSH */ var anObject = require("3bbe31d8f504111f");
+var definePropertiesModule = require("a9712f03fc468b49");
+var enumBugKeys = require("d9e0c389f84efa79");
+var hiddenKeys = require("8a43b6a211717cde");
+var html = require("78d31e3a50d79c6e");
+var documentCreateElement = require("e29f7e32a0583f3");
+var sharedKey = require("a6edaba97f293fc9");
+var GT = ">";
+var LT = "<";
+var PROTOTYPE = "prototype";
+var SCRIPT = "script";
+var IE_PROTO = sharedKey("IE_PROTO");
+var EmptyConstructor = function() {};
+var scriptTag = function(content) {
+    return LT + SCRIPT + GT + content + LT + "/" + SCRIPT + GT;
+};
+// Create object with fake `null` prototype: use ActiveX Object with cleared prototype
+var NullProtoObjectViaActiveX = function(activeXDocument) {
+    activeXDocument.write(scriptTag(""));
+    activeXDocument.close();
+    var temp = activeXDocument.parentWindow.Object;
+    activeXDocument = null; // avoid memory leak
+    return temp;
+};
+// Create object with fake `null` prototype: use iframe Object with cleared prototype
+var NullProtoObjectViaIFrame = function() {
+    // Thrash, waste and sodomy: IE GC bug
+    var iframe = documentCreateElement("iframe");
+    var JS = "java" + SCRIPT + ":";
+    var iframeDocument;
+    iframe.style.display = "none";
+    html.appendChild(iframe);
+    // https://github.com/zloirock/core-js/issues/475
+    iframe.src = String(JS);
+    iframeDocument = iframe.contentWindow.document;
+    iframeDocument.open();
+    iframeDocument.write(scriptTag("document.F=Object"));
+    iframeDocument.close();
+    return iframeDocument.F;
+};
+// Check for document.domain and active x support
+// No need to use active x approach when document.domain is not set
+// see https://github.com/es-shims/es5-shim/issues/150
+// variation of https://github.com/kitcambridge/es5-shim/commit/4f738ac066346
+// avoid IE GC bug
+var activeXDocument;
+var NullProtoObject = function() {
+    try {
+        activeXDocument = new ActiveXObject("htmlfile");
+    } catch (error) {}
+    NullProtoObject = typeof document != "undefined" ? document.domain && activeXDocument ? NullProtoObjectViaActiveX(activeXDocument) // old IE
+     : NullProtoObjectViaIFrame() : NullProtoObjectViaActiveX(activeXDocument); // WSH
+    var length = enumBugKeys.length;
+    while(length--)delete NullProtoObject[PROTOTYPE][enumBugKeys[length]];
+    return NullProtoObject();
+};
+hiddenKeys[IE_PROTO] = true;
+// `Object.create` method
+// https://tc39.es/ecma262/#sec-object.create
+// eslint-disable-next-line es/no-object-create -- safe
+module.exports = Object.create || function create(O, Properties) {
+    var result;
+    if (O !== null) {
+        EmptyConstructor[PROTOTYPE] = anObject(O);
+        result = new EmptyConstructor();
+        EmptyConstructor[PROTOTYPE] = null;
+        // add "__proto__" for Object.getPrototypeOf polyfill
+        result[IE_PROTO] = O;
+    } else result = NullProtoObject();
+    return Properties === undefined ? result : definePropertiesModule.f(result, Properties);
+};
+
+},{"3bbe31d8f504111f":"4isCr","a9712f03fc468b49":"duA6W","d9e0c389f84efa79":"9RnJm","8a43b6a211717cde":"661m4","78d31e3a50d79c6e":"2pze4","e29f7e32a0583f3":"4bOHl","a6edaba97f293fc9":"eAjGz"}],"duA6W":[function(require,module,exports) {
+"use strict";
+var DESCRIPTORS = require("aa39c539d0a1ec3f");
+var V8_PROTOTYPE_DEFINE_BUG = require("2e9118dcee7eb93e");
+var definePropertyModule = require("d88f5f00164c2da2");
+var anObject = require("12ac356c5e06e57d");
+var toIndexedObject = require("3cbdc44082c2f8b8");
+var objectKeys = require("634da70e74fce29b");
+// `Object.defineProperties` method
+// https://tc39.es/ecma262/#sec-object.defineproperties
+// eslint-disable-next-line es/no-object-defineproperties -- safe
+exports.f = DESCRIPTORS && !V8_PROTOTYPE_DEFINE_BUG ? Object.defineProperties : function defineProperties(O, Properties) {
+    anObject(O);
+    var props = toIndexedObject(Properties);
+    var keys = objectKeys(Properties);
+    var length = keys.length;
+    var index = 0;
+    var key;
+    while(length > index)definePropertyModule.f(O, key = keys[index++], props[key]);
+    return O;
+};
+
+},{"aa39c539d0a1ec3f":"92ZIi","2e9118dcee7eb93e":"ka1Un","d88f5f00164c2da2":"iJR4w","12ac356c5e06e57d":"4isCr","3cbdc44082c2f8b8":"jLWwQ","634da70e74fce29b":"kzBf4"}],"kzBf4":[function(require,module,exports) {
+"use strict";
+var internalObjectKeys = require("fb982c683f43ec98");
+var enumBugKeys = require("7cabc30df1982d48");
+// `Object.keys` method
+// https://tc39.es/ecma262/#sec-object.keys
+// eslint-disable-next-line es/no-object-keys -- safe
+module.exports = Object.keys || function keys(O) {
+    return internalObjectKeys(O, enumBugKeys);
+};
+
+},{"fb982c683f43ec98":"hl5T1","7cabc30df1982d48":"9RnJm"}],"1bojN":[function(require,module,exports) {
+"use strict";
+/* eslint-disable es/no-object-getownpropertynames -- safe */ var classof = require("279dbc8649868a7a");
+var toIndexedObject = require("430d7ab8977dd85e");
+var $getOwnPropertyNames = require("a5a6278a4291e239").f;
+var arraySlice = require("a0e199be640bf61f");
+var windowNames = typeof window == "object" && window && Object.getOwnPropertyNames ? Object.getOwnPropertyNames(window) : [];
+var getWindowNames = function(it) {
+    try {
+        return $getOwnPropertyNames(it);
+    } catch (error) {
+        return arraySlice(windowNames);
+    }
+};
+// fallback for IE11 buggy Object.getOwnPropertyNames with iframe and window
+module.exports.f = function getOwnPropertyNames(it) {
+    return windowNames && classof(it) === "Window" ? getWindowNames(it) : $getOwnPropertyNames(toIndexedObject(it));
+};
+
+},{"279dbc8649868a7a":"bdfmm","430d7ab8977dd85e":"jLWwQ","a5a6278a4291e239":"fjY04","a0e199be640bf61f":"RsFXo"}],"592rH":[function(require,module,exports) {
+"use strict";
+var makeBuiltIn = require("5bd1cd8472955124");
+var defineProperty = require("1413185c6323bbbc");
+module.exports = function(target, name, descriptor) {
+    if (descriptor.get) makeBuiltIn(descriptor.get, name, {
+        getter: true
+    });
+    if (descriptor.set) makeBuiltIn(descriptor.set, name, {
+        setter: true
+    });
+    return defineProperty.f(target, name, descriptor);
+};
+
+},{"5bd1cd8472955124":"cTB4k","1413185c6323bbbc":"iJR4w"}],"9TrPc":[function(require,module,exports) {
+"use strict";
+var wellKnownSymbol = require("2e34ececd06658d9");
+exports.f = wellKnownSymbol;
+
+},{"2e34ececd06658d9":"gTwyA"}],"en5fF":[function(require,module,exports) {
+"use strict";
+var path = require("8d5159b7d317832f");
+var hasOwn = require("42a3ea18819bfbb");
+var wrappedWellKnownSymbolModule = require("7ec639749e279eeb");
+var defineProperty = require("cbbe4becefd5c21c").f;
+module.exports = function(NAME) {
+    var Symbol = path.Symbol || (path.Symbol = {});
+    if (!hasOwn(Symbol, NAME)) defineProperty(Symbol, NAME, {
+        value: wrappedWellKnownSymbolModule.f(NAME)
+    });
+};
+
+},{"8d5159b7d317832f":"gKjqB","42a3ea18819bfbb":"gC2Q5","7ec639749e279eeb":"9TrPc","cbbe4becefd5c21c":"iJR4w"}],"gKjqB":[function(require,module,exports) {
+"use strict";
+var global = require("70f8eb6067a24c7e");
+module.exports = global;
+
+},{"70f8eb6067a24c7e":"i8HOC"}],"cSLvM":[function(require,module,exports) {
+"use strict";
+var call = require("b56ca5a55bb4c0e1");
+var getBuiltIn = require("f5359b167e9be384");
+var wellKnownSymbol = require("e7eef3415c62682d");
+var defineBuiltIn = require("8cc59229c8e85f40");
+module.exports = function() {
+    var Symbol = getBuiltIn("Symbol");
+    var SymbolPrototype = Symbol && Symbol.prototype;
+    var valueOf = SymbolPrototype && SymbolPrototype.valueOf;
+    var TO_PRIMITIVE = wellKnownSymbol("toPrimitive");
+    if (SymbolPrototype && !SymbolPrototype[TO_PRIMITIVE]) // `Symbol.prototype[@@toPrimitive]` method
+    // https://tc39.es/ecma262/#sec-symbol.prototype-@@toprimitive
+    // eslint-disable-next-line no-unused-vars -- required for .length
+    defineBuiltIn(SymbolPrototype, TO_PRIMITIVE, function(hint) {
+        return call(valueOf, this);
+    }, {
+        arity: 1
+    });
+};
+
+},{"b56ca5a55bb4c0e1":"d7JlP","f5359b167e9be384":"6ZUSY","e7eef3415c62682d":"gTwyA","8cc59229c8e85f40":"6XwEX"}],"ffT5i":[function(require,module,exports) {
+"use strict";
+var defineProperty = require("93a3d85da48077c").f;
+var hasOwn = require("2ebf7179e87d878f");
+var wellKnownSymbol = require("5b1eb5d1639e9eb7");
+var TO_STRING_TAG = wellKnownSymbol("toStringTag");
+module.exports = function(target, TAG, STATIC) {
+    if (target && !STATIC) target = target.prototype;
+    if (target && !hasOwn(target, TO_STRING_TAG)) defineProperty(target, TO_STRING_TAG, {
+        configurable: true,
+        value: TAG
+    });
+};
+
+},{"93a3d85da48077c":"iJR4w","2ebf7179e87d878f":"gC2Q5","5b1eb5d1639e9eb7":"gTwyA"}],"3NAaU":[function(require,module,exports) {
+"use strict";
+var bind = require("13e0747865316a42");
+var uncurryThis = require("99224cc18a4a792e");
+var IndexedObject = require("57aaeabd9d30911");
+var toObject = require("3acffc809f3b03fb");
+var lengthOfArrayLike = require("1fc4c4e55871562c");
+var arraySpeciesCreate = require("76c922b575fbf7bd");
+var push = uncurryThis([].push);
+// `Array.prototype.{ forEach, map, filter, some, every, find, findIndex, filterReject }` methods implementation
+var createMethod = function(TYPE) {
+    var IS_MAP = TYPE === 1;
+    var IS_FILTER = TYPE === 2;
+    var IS_SOME = TYPE === 3;
+    var IS_EVERY = TYPE === 4;
+    var IS_FIND_INDEX = TYPE === 6;
+    var IS_FILTER_REJECT = TYPE === 7;
+    var NO_HOLES = TYPE === 5 || IS_FIND_INDEX;
+    return function($this, callbackfn, that, specificCreate) {
+        var O = toObject($this);
+        var self = IndexedObject(O);
+        var length = lengthOfArrayLike(self);
+        var boundFunction = bind(callbackfn, that);
+        var index = 0;
+        var create = specificCreate || arraySpeciesCreate;
+        var target = IS_MAP ? create($this, length) : IS_FILTER || IS_FILTER_REJECT ? create($this, 0) : undefined;
+        var value, result;
+        for(; length > index; index++)if (NO_HOLES || index in self) {
+            value = self[index];
+            result = boundFunction(value, index, O);
+            if (TYPE) {
+                if (IS_MAP) target[index] = result; // map
+                else if (result) switch(TYPE){
+                    case 3:
+                        return true; // some
+                    case 5:
+                        return value; // find
+                    case 6:
+                        return index; // findIndex
+                    case 2:
+                        push(target, value); // filter
+                }
+                else switch(TYPE){
+                    case 4:
+                        return false; // every
+                    case 7:
+                        push(target, value); // filterReject
+                }
+            }
+        }
+        return IS_FIND_INDEX ? -1 : IS_SOME || IS_EVERY ? IS_EVERY : target;
+    };
+};
+module.exports = {
+    // `Array.prototype.forEach` method
+    // https://tc39.es/ecma262/#sec-array.prototype.foreach
+    forEach: createMethod(0),
+    // `Array.prototype.map` method
+    // https://tc39.es/ecma262/#sec-array.prototype.map
+    map: createMethod(1),
+    // `Array.prototype.filter` method
+    // https://tc39.es/ecma262/#sec-array.prototype.filter
+    filter: createMethod(2),
+    // `Array.prototype.some` method
+    // https://tc39.es/ecma262/#sec-array.prototype.some
+    some: createMethod(3),
+    // `Array.prototype.every` method
+    // https://tc39.es/ecma262/#sec-array.prototype.every
+    every: createMethod(4),
+    // `Array.prototype.find` method
+    // https://tc39.es/ecma262/#sec-array.prototype.find
+    find: createMethod(5),
+    // `Array.prototype.findIndex` method
+    // https://tc39.es/ecma262/#sec-array.prototype.findIndex
+    findIndex: createMethod(6),
+    // `Array.prototype.filterReject` method
+    // https://github.com/tc39/proposal-array-filtering
+    filterReject: createMethod(7)
+};
+
+},{"13e0747865316a42":"7vpmS","99224cc18a4a792e":"7GlkT","57aaeabd9d30911":"kPk5h","3acffc809f3b03fb":"5cb35","1fc4c4e55871562c":"lY4mS","76c922b575fbf7bd":"27bo1"}],"d29gK":[function(require,module,exports) {
+"use strict";
+var $ = require("5bb0291a1de27cc2");
+var getBuiltIn = require("8e0d0366f8700097");
+var hasOwn = require("1d19a51e347c2d9e");
+var toString = require("eab6cb58642f38b1");
+var shared = require("41937bc543544e22");
+var NATIVE_SYMBOL_REGISTRY = require("8877198f0deded1d");
+var StringToSymbolRegistry = shared("string-to-symbol-registry");
+var SymbolToStringRegistry = shared("symbol-to-string-registry");
+// `Symbol.for` method
+// https://tc39.es/ecma262/#sec-symbol.for
+$({
+    target: "Symbol",
+    stat: true,
+    forced: !NATIVE_SYMBOL_REGISTRY
+}, {
+    "for": function(key) {
+        var string = toString(key);
+        if (hasOwn(StringToSymbolRegistry, string)) return StringToSymbolRegistry[string];
+        var symbol = getBuiltIn("Symbol")(string);
+        StringToSymbolRegistry[string] = symbol;
+        SymbolToStringRegistry[symbol] = string;
+        return symbol;
+    }
+});
+
+},{"5bb0291a1de27cc2":"dIGt4","8e0d0366f8700097":"6ZUSY","1d19a51e347c2d9e":"gC2Q5","eab6cb58642f38b1":"a1yl4","41937bc543544e22":"i1mHK","8877198f0deded1d":"huYqp"}],"huYqp":[function(require,module,exports) {
+"use strict";
+var NATIVE_SYMBOL = require("a735884940a2eb73");
+/* eslint-disable es/no-symbol -- safe */ module.exports = NATIVE_SYMBOL && !!Symbol["for"] && !!Symbol.keyFor;
+
+},{"a735884940a2eb73":"8KyTD"}],"iUB0I":[function(require,module,exports) {
+"use strict";
+var $ = require("8dbad7485118eaf8");
+var hasOwn = require("9fce8a9af4b186a4");
+var isSymbol = require("4e16fd56c67f82fb");
+var tryToString = require("59b7b3dea7d1b71d");
+var shared = require("77b2ea800463b7d6");
+var NATIVE_SYMBOL_REGISTRY = require("ca42326fb3cb6e68");
+var SymbolToStringRegistry = shared("symbol-to-string-registry");
+// `Symbol.keyFor` method
+// https://tc39.es/ecma262/#sec-symbol.keyfor
+$({
+    target: "Symbol",
+    stat: true,
+    forced: !NATIVE_SYMBOL_REGISTRY
+}, {
+    keyFor: function keyFor(sym) {
+        if (!isSymbol(sym)) throw new TypeError(tryToString(sym) + " is not a symbol");
+        if (hasOwn(SymbolToStringRegistry, sym)) return SymbolToStringRegistry[sym];
+    }
+});
+
+},{"8dbad7485118eaf8":"dIGt4","9fce8a9af4b186a4":"gC2Q5","4e16fd56c67f82fb":"4aV4F","59b7b3dea7d1b71d":"4O7d7","77b2ea800463b7d6":"i1mHK","ca42326fb3cb6e68":"huYqp"}],"1kdiO":[function(require,module,exports) {
+"use strict";
+var $ = require("c758539029f56af9");
+var getBuiltIn = require("cd08b356bcae0b47");
+var apply = require("2f13fa715711850");
+var call = require("4cfb95fb9a0e28fc");
+var uncurryThis = require("50b40a77c21daf7f");
+var fails = require("56cf5d4bc1afd666");
+var isCallable = require("42bed86e3e73f3d2");
+var isSymbol = require("bca8b9ce5f71243b");
+var arraySlice = require("1bb05f05134df4c2");
+var getReplacerFunction = require("1136e300bbee8f1e");
+var NATIVE_SYMBOL = require("d8156a48adf3010b");
+var $String = String;
+var $stringify = getBuiltIn("JSON", "stringify");
+var exec = uncurryThis(/./.exec);
+var charAt = uncurryThis("".charAt);
+var charCodeAt = uncurryThis("".charCodeAt);
+var replace = uncurryThis("".replace);
+var numberToString = uncurryThis(1.0.toString);
+var tester = /[\uD800-\uDFFF]/g;
+var low = /^[\uD800-\uDBFF]$/;
+var hi = /^[\uDC00-\uDFFF]$/;
+var WRONG_SYMBOLS_CONVERSION = !NATIVE_SYMBOL || fails(function() {
+    var symbol = getBuiltIn("Symbol")("stringify detection");
+    // MS Edge converts symbol values to JSON as {}
+    return $stringify([
+        symbol
+    ]) !== "[null]" || $stringify({
+        a: symbol
+    }) !== "{}" || $stringify(Object(symbol)) !== "{}";
+});
+// https://github.com/tc39/proposal-well-formed-stringify
+var ILL_FORMED_UNICODE = fails(function() {
+    return $stringify("\uDF06\uD834") !== '"\udf06\ud834"' || $stringify("\uDEAD") !== '"\udead"';
+});
+var stringifyWithSymbolsFix = function(it, replacer) {
+    var args = arraySlice(arguments);
+    var $replacer = getReplacerFunction(replacer);
+    if (!isCallable($replacer) && (it === undefined || isSymbol(it))) return; // IE8 returns string on undefined
+    args[1] = function(key, value) {
+        // some old implementations (like WebKit) could pass numbers as keys
+        if (isCallable($replacer)) value = call($replacer, this, $String(key), value);
+        if (!isSymbol(value)) return value;
+    };
+    return apply($stringify, null, args);
+};
+var fixIllFormed = function(match, offset, string) {
+    var prev = charAt(string, offset - 1);
+    var next = charAt(string, offset + 1);
+    if (exec(low, match) && !exec(hi, next) || exec(hi, match) && !exec(low, prev)) return "\\u" + numberToString(charCodeAt(match, 0), 16);
+    return match;
+};
+if ($stringify) // `JSON.stringify` method
+// https://tc39.es/ecma262/#sec-json.stringify
+$({
+    target: "JSON",
+    stat: true,
+    arity: 3,
+    forced: WRONG_SYMBOLS_CONVERSION || ILL_FORMED_UNICODE
+}, {
+    // eslint-disable-next-line no-unused-vars -- required for `.length`
+    stringify: function stringify(it, replacer, space) {
+        var args = arraySlice(arguments);
+        var result = apply(WRONG_SYMBOLS_CONVERSION ? stringifyWithSymbolsFix : $stringify, null, args);
+        return ILL_FORMED_UNICODE && typeof result == "string" ? replace(result, tester, fixIllFormed) : result;
+    }
+});
+
+},{"c758539029f56af9":"dIGt4","cd08b356bcae0b47":"6ZUSY","2f13fa715711850":"148ka","4cfb95fb9a0e28fc":"d7JlP","50b40a77c21daf7f":"7GlkT","56cf5d4bc1afd666":"hL6D2","42bed86e3e73f3d2":"l3Kyn","bca8b9ce5f71243b":"4aV4F","1bb05f05134df4c2":"RsFXo","1136e300bbee8f1e":"gw5vO","d8156a48adf3010b":"8KyTD"}],"gw5vO":[function(require,module,exports) {
+"use strict";
+var uncurryThis = require("d58a1810bb01cb9f");
+var isArray = require("fc692ad896e8fbbf");
+var isCallable = require("78f870626b97cbe9");
+var classof = require("1da5109b0acae5a0");
+var toString = require("71deb4f6b3f33cf0");
+var push = uncurryThis([].push);
+module.exports = function(replacer) {
+    if (isCallable(replacer)) return replacer;
+    if (!isArray(replacer)) return;
+    var rawLength = replacer.length;
+    var keys = [];
+    for(var i = 0; i < rawLength; i++){
+        var element = replacer[i];
+        if (typeof element == "string") push(keys, element);
+        else if (typeof element == "number" || classof(element) === "Number" || classof(element) === "String") push(keys, toString(element));
+    }
+    var keysLength = keys.length;
+    var root = true;
+    return function(key, value) {
+        if (root) {
+            root = false;
+            return value;
+        }
+        if (isArray(this)) return value;
+        for(var j = 0; j < keysLength; j++)if (keys[j] === key) return value;
+    };
+};
+
+},{"d58a1810bb01cb9f":"7GlkT","fc692ad896e8fbbf":"iZ18O","78f870626b97cbe9":"l3Kyn","1da5109b0acae5a0":"bdfmm","71deb4f6b3f33cf0":"a1yl4"}],"cMwHd":[function(require,module,exports) {
+"use strict";
+var $ = require("840946d70e8a2143");
+var NATIVE_SYMBOL = require("ab5e4f7a7726b049");
+var fails = require("dbf1e55f293c4447");
+var getOwnPropertySymbolsModule = require("52dfb60ffa243118");
+var toObject = require("7dd92ded8a0ad49a");
+// V8 ~ Chrome 38 and 39 `Object.getOwnPropertySymbols` fails on primitives
+// https://bugs.chromium.org/p/v8/issues/detail?id=3443
+var FORCED = !NATIVE_SYMBOL || fails(function() {
+    getOwnPropertySymbolsModule.f(1);
+});
+// `Object.getOwnPropertySymbols` method
+// https://tc39.es/ecma262/#sec-object.getownpropertysymbols
+$({
+    target: "Object",
+    stat: true,
+    forced: FORCED
+}, {
+    getOwnPropertySymbols: function getOwnPropertySymbols(it) {
+        var $getOwnPropertySymbols = getOwnPropertySymbolsModule.f;
+        return $getOwnPropertySymbols ? $getOwnPropertySymbols(toObject(it)) : [];
+    }
+});
+
+},{"840946d70e8a2143":"dIGt4","ab5e4f7a7726b049":"8KyTD","dbf1e55f293c4447":"hL6D2","52dfb60ffa243118":"4DWO3","7dd92ded8a0ad49a":"5cb35"}],"RU9Zf":[function(require,module,exports) {
+"use strict";
+var defineWellKnownSymbol = require("2d360c40368e9a3");
+// `Symbol.asyncIterator` well-known symbol
+// https://tc39.es/ecma262/#sec-symbol.asynciterator
+defineWellKnownSymbol("asyncIterator");
+
+},{"2d360c40368e9a3":"en5fF"}],"9PnxW":[function(require,module,exports) {
+// `Symbol.prototype.description` getter
+// https://tc39.es/ecma262/#sec-symbol.prototype.description
+"use strict";
+var $ = require("97b172d75b2d24d2");
+var DESCRIPTORS = require("f4d7d8fd842c0756");
+var global = require("aee55f2d7c8a208f");
+var uncurryThis = require("3168cbf7cd0b9882");
+var hasOwn = require("a16d92d5b8266639");
+var isCallable = require("c20ab10c7fc8df3c");
+var isPrototypeOf = require("f1577de30367373a");
+var toString = require("a801f47d1f3aec6");
+var defineBuiltInAccessor = require("4040e115390d9ece");
+var copyConstructorProperties = require("76bfc13417714c00");
+var NativeSymbol = global.Symbol;
+var SymbolPrototype = NativeSymbol && NativeSymbol.prototype;
+if (DESCRIPTORS && isCallable(NativeSymbol) && (!("description" in SymbolPrototype) || // Safari 12 bug
+NativeSymbol().description !== undefined)) {
+    var EmptyStringDescriptionStore = {};
+    // wrap Symbol constructor for correct work with undefined description
+    var SymbolWrapper = function Symbol() {
+        var description = arguments.length < 1 || arguments[0] === undefined ? undefined : toString(arguments[0]);
+        var result = isPrototypeOf(SymbolPrototype, this) ? new NativeSymbol(description) : description === undefined ? NativeSymbol() : NativeSymbol(description);
+        if (description === "") EmptyStringDescriptionStore[result] = true;
+        return result;
+    };
+    copyConstructorProperties(SymbolWrapper, NativeSymbol);
+    SymbolWrapper.prototype = SymbolPrototype;
+    SymbolPrototype.constructor = SymbolWrapper;
+    var NATIVE_SYMBOL = String(NativeSymbol("description detection")) === "Symbol(description detection)";
+    var thisSymbolValue = uncurryThis(SymbolPrototype.valueOf);
+    var symbolDescriptiveString = uncurryThis(SymbolPrototype.toString);
+    var regexp = /^Symbol\((.*)\)[^)]+$/;
+    var replace = uncurryThis("".replace);
+    var stringSlice = uncurryThis("".slice);
+    defineBuiltInAccessor(SymbolPrototype, "description", {
+        configurable: true,
+        get: function description() {
+            var symbol = thisSymbolValue(this);
+            if (hasOwn(EmptyStringDescriptionStore, symbol)) return "";
+            var string = symbolDescriptiveString(symbol);
+            var desc = NATIVE_SYMBOL ? stringSlice(string, 7, -1) : replace(string, regexp, "$1");
+            return desc === "" ? undefined : desc;
+        }
+    });
+    $({
+        global: true,
+        constructor: true,
+        forced: true
+    }, {
+        Symbol: SymbolWrapper
+    });
+}
+
+},{"97b172d75b2d24d2":"dIGt4","f4d7d8fd842c0756":"92ZIi","aee55f2d7c8a208f":"i8HOC","3168cbf7cd0b9882":"7GlkT","a16d92d5b8266639":"gC2Q5","c20ab10c7fc8df3c":"l3Kyn","f1577de30367373a":"3jtKQ","a801f47d1f3aec6":"a1yl4","4040e115390d9ece":"592rH","76bfc13417714c00":"9Z12i"}],"9uKu1":[function(require,module,exports) {
+"use strict";
+var defineWellKnownSymbol = require("81bebfae66866813");
+// `Symbol.hasInstance` well-known symbol
+// https://tc39.es/ecma262/#sec-symbol.hasinstance
+defineWellKnownSymbol("hasInstance");
+
+},{"81bebfae66866813":"en5fF"}],"fCzth":[function(require,module,exports) {
+"use strict";
+var defineWellKnownSymbol = require("ccf6a8a73e56cd3a");
+// `Symbol.isConcatSpreadable` well-known symbol
+// https://tc39.es/ecma262/#sec-symbol.isconcatspreadable
+defineWellKnownSymbol("isConcatSpreadable");
+
+},{"ccf6a8a73e56cd3a":"en5fF"}],"i3PKT":[function(require,module,exports) {
+"use strict";
+var defineWellKnownSymbol = require("1c415af53b28a6ea");
+// `Symbol.iterator` well-known symbol
+// https://tc39.es/ecma262/#sec-symbol.iterator
+defineWellKnownSymbol("iterator");
+
+},{"1c415af53b28a6ea":"en5fF"}],"hWT2K":[function(require,module,exports) {
+"use strict";
+var defineWellKnownSymbol = require("d4aa350c591898c3");
+// `Symbol.match` well-known symbol
+// https://tc39.es/ecma262/#sec-symbol.match
+defineWellKnownSymbol("match");
+
+},{"d4aa350c591898c3":"en5fF"}],"a5lqJ":[function(require,module,exports) {
+"use strict";
+var defineWellKnownSymbol = require("8f030c55b2f81e57");
+// `Symbol.matchAll` well-known symbol
+// https://tc39.es/ecma262/#sec-symbol.matchall
+defineWellKnownSymbol("matchAll");
+
+},{"8f030c55b2f81e57":"en5fF"}],"5wvK6":[function(require,module,exports) {
+"use strict";
+var defineWellKnownSymbol = require("120ed8f933c050ae");
+// `Symbol.replace` well-known symbol
+// https://tc39.es/ecma262/#sec-symbol.replace
+defineWellKnownSymbol("replace");
+
+},{"120ed8f933c050ae":"en5fF"}],"6VGtU":[function(require,module,exports) {
+"use strict";
+var defineWellKnownSymbol = require("e61fe26d945e7ea9");
+// `Symbol.search` well-known symbol
+// https://tc39.es/ecma262/#sec-symbol.search
+defineWellKnownSymbol("search");
+
+},{"e61fe26d945e7ea9":"en5fF"}],"jxmZY":[function(require,module,exports) {
+"use strict";
+var defineWellKnownSymbol = require("9202fdf8a23f6674");
+// `Symbol.species` well-known symbol
+// https://tc39.es/ecma262/#sec-symbol.species
+defineWellKnownSymbol("species");
+
+},{"9202fdf8a23f6674":"en5fF"}],"j3TNE":[function(require,module,exports) {
+"use strict";
+var defineWellKnownSymbol = require("75b48d0f3b5ea4e1");
+// `Symbol.split` well-known symbol
+// https://tc39.es/ecma262/#sec-symbol.split
+defineWellKnownSymbol("split");
+
+},{"75b48d0f3b5ea4e1":"en5fF"}],"72eMP":[function(require,module,exports) {
+"use strict";
+var defineWellKnownSymbol = require("66e19094d20833e6");
+var defineSymbolToPrimitive = require("24c2fb6481a71c59");
+// `Symbol.toPrimitive` well-known symbol
+// https://tc39.es/ecma262/#sec-symbol.toprimitive
+defineWellKnownSymbol("toPrimitive");
+// `Symbol.prototype[@@toPrimitive]` method
+// https://tc39.es/ecma262/#sec-symbol.prototype-@@toprimitive
+defineSymbolToPrimitive();
+
+},{"66e19094d20833e6":"en5fF","24c2fb6481a71c59":"cSLvM"}],"jRTLb":[function(require,module,exports) {
+"use strict";
+var getBuiltIn = require("79fc56cab59273aa");
+var defineWellKnownSymbol = require("f48b67430238cd9f");
+var setToStringTag = require("94b18c3989610f3b");
+// `Symbol.toStringTag` well-known symbol
+// https://tc39.es/ecma262/#sec-symbol.tostringtag
+defineWellKnownSymbol("toStringTag");
+// `Symbol.prototype[@@toStringTag]` property
+// https://tc39.es/ecma262/#sec-symbol.prototype-@@tostringtag
+setToStringTag(getBuiltIn("Symbol"), "Symbol");
+
+},{"79fc56cab59273aa":"6ZUSY","f48b67430238cd9f":"en5fF","94b18c3989610f3b":"ffT5i"}],"dkEbD":[function(require,module,exports) {
+"use strict";
+var defineWellKnownSymbol = require("37a7f6188e0dd54c");
+// `Symbol.unscopables` well-known symbol
+// https://tc39.es/ecma262/#sec-symbol.unscopables
+defineWellKnownSymbol("unscopables");
+
+},{"37a7f6188e0dd54c":"en5fF"}],"5v5yi":[function(require,module,exports) {
+"use strict";
+var global = require("683a36cf5ced6cff");
+var setToStringTag = require("925145db661479ea");
+// JSON[@@toStringTag] property
+// https://tc39.es/ecma262/#sec-json-@@tostringtag
+setToStringTag(global.JSON, "JSON", true);
+
+},{"683a36cf5ced6cff":"i8HOC","925145db661479ea":"ffT5i"}],"7b0UU":[function(require,module,exports) {
+"use strict";
+var setToStringTag = require("8c4fc1e6a65b6d2f");
+// Math[@@toStringTag] property
+// https://tc39.es/ecma262/#sec-math-@@tostringtag
+setToStringTag(Math, "Math", true);
+
+},{"8c4fc1e6a65b6d2f":"ffT5i"}],"2qZLg":[function(require,module,exports) {
+"use strict";
+var $ = require("9aa7ab2c6cbf6701");
+var global = require("678fb8caddbe1b5");
+var setToStringTag = require("717556d45c34d721");
+$({
+    global: true
+}, {
+    Reflect: {}
+});
+// Reflect[@@toStringTag] property
+// https://tc39.es/ecma262/#sec-reflect-@@tostringtag
+setToStringTag(global.Reflect, "Reflect", true);
+
+},{"9aa7ab2c6cbf6701":"dIGt4","678fb8caddbe1b5":"i8HOC","717556d45c34d721":"ffT5i"}]},["hycaY","aenu9"], "aenu9", "parcelRequire3a11")
 
 //# sourceMappingURL=index.e37f48ea.js.map
